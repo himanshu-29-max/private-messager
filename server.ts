@@ -4,11 +4,10 @@ import next from "next";
 import { Server } from "socket.io";
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOSTNAME || "0.0.0.0";
 const port = parseInt(process.env.PORT || "3000", 10);
 
-// Initialize Next.js app
-const app = next({ dev, hostname, port });
+// Initialize Next.js app without explicit hostname so it accepts all hosts
+const app = next({ dev, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
@@ -69,7 +68,7 @@ app.prepare().then(() => {
       console.error(err);
       process.exit(1);
     })
-    .listen(port, () => {
-      console.log(`> Ready on http://${hostname}:${port}`);
+    .listen(port, "0.0.0.0", () => {
+      console.log(`> Ready on http://0.0.0.0:${port}`);
     });
 });
