@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+export const dynamic = 'force-dynamic';
 import { prisma } from "@/lib/db";
 import * as argon2 from "argon2";
 
