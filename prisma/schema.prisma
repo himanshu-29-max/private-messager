@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VisibilityMode {
+  public
+  private
+  stealth
+}
+
+model User {
+  internal_uuid       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  display_id          String         @unique @db.VarChar(30)
+  
+  // Profile Additions
+  name                String?        @db.VarChar(50)
+  profile_picture     String?
+  
+  // Traditional Auth
+  password_hash       String?        
+  email               String?        @unique
+  phone               String?        @unique
+  
+  // OAuth Binding
+  auth_provider       String?        // 'google', 'microsoft', 'apple'
+  provider_account_id String?        @unique
+
+  display_id_history  Json           @default("[]")
+  identity_public_key Bytes?
+  prekey_bundle       Json?
+  id_visibility       VisibilityMode @default(private)
+  created_at          DateTime       @default(now())
+
+  room_members        RoomMember[]
+  messages            Message[]
+  
+  // Contacts and Direct Chats
+  contacts_owned      Contact[]      @relation("OwnerContacts")
+  contacts_of         Contact[]      @relation("ContactUser")
+  direct_chats_1      DirectChat[]   @relation("ChatUser1")
+  direct_chats_2      DirectChat[]   @relation("ChatUser2")
+
+  // Stories and Settings
+  stories             Story[]
+  settings            UserSettings?
+  
+  // Blocking
+  blocked_users       BlockedUser[]  @relation("Blocker")
+  blocked_by          BlockedUser[]  @relation("Blocked")
+  
+  // Security
+  login_activities    LoginActivity[]
+
+  @@map("users")
+}
+
+model LoginActivity {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String   @db.Uuid
+  device_info String?  // e.g. "Chrome on Windows"
+  ip_address  String?
+  location    String?  // e.g. "New York, USA"
+  login_time  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [internal_uuid], onDelete: Cascade)
+
+  @@map("login_activities")
+}
+
+model BlockedUser {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blocker_id       String   @db.Uuid
+  blocked_user_id  String   @db.Uuid
+  created_at       DateTime @default(now())
+
+  blocker          User     @relation("Blocker", fields: [blocker_id], references: [internal_uuid], onDelete: Cascade)
+  blocked_user     User     @relation("Blocked", fields: [blocked_user_id], references: [internal_uuid], onDelete: Cascade)
+
+  @@unique([blocker_id, blocked_user_id])
+  @@map("blocked_users")
+}
+
+model Room {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  pin_hash       String       // Argon2id hash
+  failed_entries Int          @default(0)
+  created_at     DateTime     @default(now())
+  
+  members        RoomMember[]
+  messages       Message[]
+  
+  @@map("rooms")
+}
+
+model RoomMember {
+  room_id   String @db.Uuid
+  user_uuid String @db.Uuid
+  role      String @default("member") // admin, member
+  
+  room Room @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_uuid], references: [internal_uuid], onDelete: Cascade)
+
+  @@id([room_id, user_uuid])
+  @@map("room_members")
+}
+
+model Contact {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_id        String @db.Uuid
+  contact_user_id String @db.Uuid
+  saved_name      String?
+  
+  owner           User   @relation("OwnerContacts", fields: [owner_id], references: [internal_uuid], onDelete: Cascade)
+  contact_user    User   @relation("ContactUser", fields: [contact_user_id], references: [internal_uuid], onDelete: Cascade)
+
+  @@unique([owner_id, contact_user_id])
+  @@map("contacts")
+}
+
+model DirectChat {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user1_id      String   @db.Uuid
+  user2_id      String   @db.Uuid
+  last_activity DateTime @default(now())
+  
+  user1         User     @relation("ChatUser1", fields: [user1_id], references: [internal_uuid], onDelete: Cascade)
+  user2         User     @relation("ChatUser2", fields: [user2_id], references: [internal_uuid], onDelete: Cascade)
+  messages      Message[]
+
+  @@unique([user1_id, user2_id])
+  @@map("direct_chats")
+}
+
+model Message {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  room_id        String?  @db.Uuid
+  direct_chat_id String?  @db.Uuid
+  sender_id      String   @db.Uuid
+  payload        String   // Encrypted payload
+  type           String   @default("TEXT") // TEXT, IMAGE, VOICE_NOTE
+  status         String   @default("SENT") // SENT, DELIVERED, READ
+  created_at     DateTime @default(now())
+
+  room           Room?       @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  direct_chat    DirectChat? @relation(fields: [direct_chat_id], references: [id], onDelete: Cascade)
+  user           User        @relation(fields: [sender_id], references: [internal_uuid], onDelete: Cascade)
+  
+  @@map("messages")
+}
+
+model Story {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  media_url  String   // Encrypted payload or URL
+  caption    String?
+  created_at DateTime @default(now())
+  expires_at DateTime // 24 hours after creation
+  
+  user       User     @relation(fields: [user_id], references: [internal_uuid], onDelete: Cascade)
+  
+  @@map("stories")
+}
+
+model UserSettings {
+  user_id       String  @id @db.Uuid
+  theme         String  @default("dark")
+  read_receipts Boolean @default(true)
+  last_seen     Boolean @default(true)
+  
+  user          User    @relation(fields: [user_id], references: [internal_uuid], onDelete: Cascade)
+  
+  @@map("user_settings")
+}
