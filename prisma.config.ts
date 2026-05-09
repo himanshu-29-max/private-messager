@@ -3,12 +3,19 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+console.log("=== PRISMA CONFIG DEBUG ===");
+console.log("DATABASE_URL is defined:", !!process.env.DATABASE_URL);
+if (!process.env.DATABASE_URL) {
+  console.error("FATAL: DATABASE_URL is literally undefined or empty in process.env.");
+  console.error("Available env keys:", Object.keys(process.env).join(", "));
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost/dummy",
   },
 });
